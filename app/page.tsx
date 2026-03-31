@@ -1,11 +1,29 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { CSSProperties, ReactNode, useMemo, useState } from "react";
 
 const GOOGLE_SHEETS_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbxs_tE3OQE0G2awxqRqJFH4DwqaeeN7IaczuloHb6aEJJmyEq0YAGxiXuR1uALZn8ULzA/exec";
 
-const initialForm = {
+type RSVPForm = {
+  familyName: string;
+  primaryContact: string;
+  phone: string;
+  email: string;
+  adults: string;
+  kids: string;
+  hotelNeeded: "yes" | "no";
+  roomsNeeded: string;
+  nights: string;
+  travelMode: "" | "Flight" | "Drive" | "Other";
+  notes: string;
+};
+
+type RSVPSubmission = RSVPForm & {
+  submittedAt: string;
+};
+
+const initialForm: RSVPForm = {
   familyName: "",
   primaryContact: "",
   phone: "",
@@ -19,11 +37,11 @@ const initialForm = {
   notes: "",
 };
 
-function calculateTotalPeople(items) {
+function calculateTotalPeople(items: Array<Pick<RSVPForm, "adults" | "kids">>): number {
   return items.reduce((sum, item) => sum + Number(item.adults || 0) + Number(item.kids || 0), 0);
 }
 
-function calculateTotalRooms(items) {
+function calculateTotalRooms(items: Array<Pick<RSVPForm, "hotelNeeded" | "roomsNeeded">>): number {
   return items.reduce((sum, item) => {
     if (item.hotelNeeded !== "yes") return sum;
     return sum + Number(item.roomsNeeded || 0);
@@ -32,13 +50,23 @@ function calculateTotalRooms(items) {
 
 console.assert(calculateTotalPeople([{ adults: "2", kids: "3" }]) === 5, "Expected total people to equal 5");
 console.assert(
-  calculateTotalRooms([{ hotelNeeded: "yes", roomsNeeded: "2" }, { hotelNeeded: "no", roomsNeeded: "4" }]) === 2,
+  calculateTotalRooms([
+    { hotelNeeded: "yes", roomsNeeded: "2" },
+    { hotelNeeded: "no", roomsNeeded: "4" },
+  ]) === 2,
   "Expected total rooms to equal 2"
+);
+console.assert(
+  calculateTotalPeople([
+    { adults: "2", kids: "1" },
+    { adults: "3", kids: "0" },
+  ]) === 6,
+  "Expected totals across multiple families to equal 6"
 );
 
 export default function Page() {
-  const [form, setForm] = useState(initialForm);
-  const [submitted, setSubmitted] = useState([]);
+  const [form, setForm] = useState<RSVPForm>(initialForm);
+  const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,14 +74,14 @@ export default function Page() {
   const totalPeople = useMemo(() => calculateTotalPeople(submitted), [submitted]);
   const totalRooms = useMemo(() => calculateTotalRooms(submitted), [submitted]);
 
-  const updateField = (key, value) => {
+  const updateField = <K extends keyof RSVPForm>(key: K, value: RSVPForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const payload = {
+    const payload: RSVPSubmission = {
       ...form,
       submittedAt: new Date().toLocaleString(),
     };
@@ -153,7 +181,9 @@ export default function Page() {
               <Field label="Adults">
                 <select style={styles.input} value={form.adults} onChange={(e) => updateField("adults", e.target.value)}>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                    <option key={n} value={String(n)}>{n}</option>
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
                   ))}
                 </select>
               </Field>
@@ -161,17 +191,21 @@ export default function Page() {
               <Field label="Kids">
                 <select style={styles.input} value={form.kids} onChange={(e) => updateField("kids", e.target.value)}>
                   {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-                    <option key={n} value={String(n)}>{n}</option>
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
                   ))}
                 </select>
               </Field>
 
-              <div style={styles.noticeBox}>
-                All families are assumed to attend July 20–22. If different, mention it in Notes.
-              </div>
+              <div style={styles.noticeBox}>All families are assumed to attend July 20–22. If different, mention it in Notes.</div>
 
               <Field label="Need Hotel Room?">
-                <select style={styles.input} value={form.hotelNeeded} onChange={(e) => updateField("hotelNeeded", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.hotelNeeded}
+                  onChange={(e) => updateField("hotelNeeded", e.target.value as RSVPForm["hotelNeeded"])}
+                >
                   <option value="yes">Yes</option>
                   <option value="no">No</option>
                 </select>
@@ -180,7 +214,9 @@ export default function Page() {
               <Field label="Rooms Needed">
                 <select style={styles.input} value={form.roomsNeeded} onChange={(e) => updateField("roomsNeeded", e.target.value)}>
                   {[1, 2, 3, 4].map((n) => (
-                    <option key={n} value={String(n)}>{n}</option>
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
                   ))}
                 </select>
               </Field>
@@ -194,7 +230,11 @@ export default function Page() {
               </Field>
 
               <Field label="Travel Mode">
-                <select style={styles.input} value={form.travelMode} onChange={(e) => updateField("travelMode", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.travelMode}
+                  onChange={(e) => updateField("travelMode", e.target.value as RSVPForm["travelMode"])}
+                >
                   <option value="">Select</option>
                   <option value="Flight">Flight</option>
                   <option value="Drive">Drive</option>
@@ -205,7 +245,7 @@ export default function Page() {
               <div style={{ gridColumn: "1 / -1" }}>
                 <Field label="Notes">
                   <textarea
-                    style={{ ...styles.input, minHeight: 110, resize: "vertical" }}
+                    style={{ ...styles.input, minHeight: 110, resize: "vertical" as const }}
                     value={form.notes}
                     onChange={(e) => updateField("notes", e.target.value)}
                     placeholder="Anything else you'd like us to know"
@@ -220,9 +260,7 @@ export default function Page() {
                 </button>
               </div>
 
-              {success && (
-                <div style={styles.successBox}>RSVP submitted successfully.</div>
-              )}
+              {success && <div style={styles.successBox}>RSVP submitted successfully.</div>}
             </form>
           </section>
 
@@ -254,7 +292,7 @@ export default function Page() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={styles.fieldWrap}>
       <label style={styles.label}>{label}</label>
@@ -263,7 +301,7 @@ function Field({ label, children }) {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.statCard}>
       <div style={styles.statValue}>{value}</div>
@@ -272,7 +310,7 @@ function StatCard({ label, value }) {
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "linear-gradient(to bottom, #fff7ed, #ffffff, #fff1f2)",
