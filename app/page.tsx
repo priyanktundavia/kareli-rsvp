@@ -60,10 +60,27 @@ function calculateTotalRooms(items: Array<Pick<RSVPForm, "hotelNeeded" | "roomsN
   }, 0);
 }
 
+console.assert(calculateTotalPeople([{ adults: "2", kids: "3" }]) === 5, "Expected total people to equal 5");
+console.assert(
+  calculateTotalRooms([
+    { hotelNeeded: "yes", roomsNeeded: "2" },
+    { hotelNeeded: "no", roomsNeeded: "4" },
+  ]) === 2,
+  "Expected total rooms to equal 2"
+);
+console.assert(
+  calculateTotalPeople([
+    { adults: "2", kids: "1" },
+    { adults: "3", kids: "0" },
+  ]) === 6,
+  "Expected totals across multiple families to equal 6"
+);
+
 export default function Page() {
   const [form, setForm] = useState<RSVPForm>(initialForm);
   const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
   const [success, setSuccess] = useState(false);
+  const [successName, setSuccessName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [publicTotals, setPublicTotals] = useState<PublicTotals>(initialTotals);
   const [isLoadingTotals, setIsLoadingTotals] = useState(true);
@@ -75,13 +92,11 @@ export default function Page() {
   useEffect(() => {
     const loadTotals = async () => {
       try {
-        const response = await fetch("/api/totals", {
+        const response = await fetch(GOOGLE_SHEETS_ENDPOINT, {
           method: "GET",
           cache: "no-store",
         });
-
         const data = await response.json();
-
         setPublicTotals({
           families: Number(data.families || 0),
           attendees: Number(data.attendees || 0),
@@ -132,6 +147,7 @@ export default function Page() {
       console.error("Error sending to Google Sheets:", err);
     } finally {
       setSubmitted((prev) => [payload, ...prev]);
+      setSuccessName(payload.familyName || payload.primaryContact || "Your family");
       setForm(initialForm);
       setSuccess(true);
       setIsSubmitting(false);
@@ -141,40 +157,107 @@ export default function Page() {
 
   return (
     <main style={styles.page}>
+      <style>{`
+        * { box-sizing: border-box; }
+        html, body {
+          width: 100%;
+          overflow-x: hidden;
+        }
+        .stats-row {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+        .main-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 24px;
+          align-items: start;
+        }
+        .form-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .field-span-full {
+          grid-column: 1 / -1;
+        }
+        @media (min-width: 641px) {
+          .stats-row {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 901px) {
+          .main-grid {
+            grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+          }
+          .form-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 640px) {
+          .hero-content {
+            padding: 20px !important;
+            min-height: 260px !important;
+          }
+          .hero-title {
+            font-size: 2rem !important;
+            line-height: 1.1 !important;
+          }
+          .hero-text {
+            font-size: 1rem !important;
+            line-height: 1.5 !important;
+          }
+          .section-card {
+            padding: 18px !important;
+            border-radius: 22px !important;
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .footer-bar {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+          .footer-button {
+            width: 100%;
+          }
+          .live-note {
+            font-size: 13px !important;
+          }
+        }
+      `}</style>
       <div style={styles.container}>
         <section style={styles.hero}>
           <img src="/kareli-photo.jpeg" alt="Kareli Gaam Group" style={styles.heroImage} />
           <div style={styles.heroOverlay} />
-          <div style={styles.heroContent}>
+          <div style={styles.heroContent} className="hero-content">
             <div style={styles.badge}>Kareli Gaam Convention 2026</div>
-            <h1 style={styles.heroTitle}>Dallas Sneh Milan RSVP</h1>
-            <p style={styles.heroText}>
-              A warm invitation for the entire Kareli family — sons, daughters, sisters, and their
-              families — to come together and celebrate.
+            <h1 style={styles.heroTitle} className="hero-title">Dallas Sneh Milan RSVP</h1>
+            <p style={styles.heroText} className="hero-text">
+              A warm invitation for the entire Kareli family — sons, daughters, sisters, and their families — to come together and celebrate.
             </p>
           </div>
         </section>
 
-        <section style={styles.statsRow}>
+        <section style={styles.statsRow} className="stats-row">
           <StatCard label="Families" value={isLoadingTotals ? "..." : String(totalFamilies)} />
           <StatCard label="Attendees" value={isLoadingTotals ? "..." : String(totalPeople)} />
           <StatCard label="Rooms Booked" value={isLoadingTotals ? "..." : String(totalRooms)} />
           <StatCard label="RSVP" value="Apr 30" />
         </section>
 
-        <div style={styles.liveNote}>
+        <div style={styles.liveNote} className="live-note">
           Live registration totals update automatically as new families submit their RSVP.
         </div>
 
-        <div style={styles.mainGrid}>
-          <section style={styles.card}>
+        <div style={styles.mainGrid} className="main-grid">
+          <section style={styles.card} className="section-card">
             <h2 style={styles.sectionTitle}>Registration Form</h2>
             <p style={styles.sectionText}>
-              Please submit one form per family. This helps us estimate attendance and hotel room
-              needs.
+              Please submit one form per family. This helps us estimate attendance and hotel room needs.
             </p>
 
-            <form onSubmit={handleSubmit} style={styles.formGrid}>
+            <form onSubmit={handleSubmit} style={styles.formGrid} className="form-grid">
               <Field label="Head Name">
                 <input
                   style={styles.input}
@@ -216,11 +299,7 @@ export default function Page() {
               </Field>
 
               <Field label="Adults">
-                <select
-                  style={styles.input}
-                  value={form.adults}
-                  onChange={(e) => updateField("adults", e.target.value)}
-                >
+                <select style={styles.input} value={form.adults} onChange={(e) => updateField("adults", e.target.value)}>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -230,11 +309,7 @@ export default function Page() {
               </Field>
 
               <Field label="Kids">
-                <select
-                  style={styles.input}
-                  value={form.kids}
-                  onChange={(e) => updateField("kids", e.target.value)}
-                >
+                <select style={styles.input} value={form.kids} onChange={(e) => updateField("kids", e.target.value)}>
                   {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -243,17 +318,13 @@ export default function Page() {
                 </select>
               </Field>
 
-              <div style={styles.noticeBox}>
-                All families are assumed to attend July 20–22. If different, mention it in Notes.
-              </div>
+              <div style={styles.noticeBox}>All families are assumed to attend July 20–22. If different, mention it in Notes.</div>
 
               <Field label="Need Hotel Room?">
                 <select
                   style={styles.input}
                   value={form.hotelNeeded}
-                  onChange={(e) =>
-                    updateField("hotelNeeded", e.target.value as RSVPForm["hotelNeeded"])
-                  }
+                  onChange={(e) => updateField("hotelNeeded", e.target.value as RSVPForm["hotelNeeded"])}
                 >
                   <option value="yes">Yes</option>
                   <option value="no">No</option>
@@ -261,11 +332,7 @@ export default function Page() {
               </Field>
 
               <Field label="Rooms Needed">
-                <select
-                  style={styles.input}
-                  value={form.roomsNeeded}
-                  onChange={(e) => updateField("roomsNeeded", e.target.value)}
-                >
+                <select style={styles.input} value={form.roomsNeeded} onChange={(e) => updateField("roomsNeeded", e.target.value)}>
                   {[1, 2, 3, 4].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -275,11 +342,7 @@ export default function Page() {
               </Field>
 
               <Field label="Number of Nights">
-                <select
-                  style={styles.input}
-                  value={form.nights}
-                  onChange={(e) => updateField("nights", e.target.value)}
-                >
+                <select style={styles.input} value={form.nights} onChange={(e) => updateField("nights", e.target.value)}>
                   <option value="1">1 Night</option>
                   <option value="2">2 Nights</option>
                   <option value="3">3 Nights</option>
@@ -290,9 +353,7 @@ export default function Page() {
                 <select
                   style={styles.input}
                   value={form.travelMode}
-                  onChange={(e) =>
-                    updateField("travelMode", e.target.value as RSVPForm["travelMode"])
-                  }
+                  onChange={(e) => updateField("travelMode", e.target.value as RSVPForm["travelMode"])}
                 >
                   <option value="">Select</option>
                   <option value="Flight">Flight</option>
@@ -301,7 +362,7 @@ export default function Page() {
                 </select>
               </Field>
 
-              <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{ gridColumn: "1 / -1" }} className="field-span-full">
                 <Field label="Notes">
                   <textarea
                     style={{ ...styles.input, minHeight: 110, resize: "vertical" as const }}
@@ -312,19 +373,23 @@ export default function Page() {
                 </Field>
               </div>
 
-              <div style={styles.footerBar}>
+              <div style={styles.footerBar} className="footer-bar">
                 <div style={styles.footerText}>July 20–22, 2026 · Hyatt Place Garland</div>
-                <button type="submit" disabled={isSubmitting} style={styles.button}>
+                <button type="submit" disabled={isSubmitting} style={styles.button} className="footer-button">
                   {isSubmitting ? "Submitting..." : "Submit RSVP"}
                 </button>
               </div>
 
-              {success && <div style={styles.successBox}>RSVP submitted successfully.</div>}
+              {success && (
+                <div style={styles.successBox}>
+                  Thank you {successName}, your RSVP is confirmed.
+                </div>
+              )}
             </form>
           </section>
 
           <aside style={styles.sidebar}>
-            <section style={styles.card}>
+            <section style={styles.card} className="section-card">
               <h3 style={styles.sidebarTitle}>Event Info</h3>
               <div style={styles.sidebarText}>Hyatt Place Garland, TX</div>
               <div style={styles.sidebarText}>July 20–22, 2026</div>
@@ -332,15 +397,14 @@ export default function Page() {
               <div style={styles.sidebarText}>$99/night rooms</div>
             </section>
 
-            <section style={styles.card}>
+            <section style={styles.card} className="section-card">
               <h3 style={styles.sidebarTitle}>Recent</h3>
               {submitted.length === 0 ? (
                 <div style={styles.mutedText}>No registrations yet in this browser session</div>
               ) : (
                 submitted.map((entry, i) => (
                   <div key={`${entry.familyName}-${i}`} style={styles.recentItem}>
-                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people -{" "}
-                    {entry.roomsNeeded} rooms × {entry.nights} nights
+                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people - {entry.roomsNeeded} rooms × {entry.nights} nights
                   </div>
                 ))
               )}
@@ -436,8 +500,6 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 0,
   },
   statsRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 16,
     marginBottom: 16,
   },
@@ -468,12 +530,13 @@ const styles: Record<string, CSSProperties> = {
     color: "#64748b",
   },
   mainGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 2fr) minmax(280px, 1fr)",
     gap: 24,
+    width: "100%",
   },
   card: {
     background: "white",
+    width: "100%",
+    minWidth: 0,
     borderRadius: 28,
     padding: 24,
     boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
@@ -491,8 +554,6 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.5,
   },
   formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 20,
   },
   fieldWrap: {
@@ -505,6 +566,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
   },
   input: {
+    display: "block",
     width: "100%",
     border: "1px solid #d1d5db",
     borderRadius: 14,
