@@ -2,8 +2,7 @@
 
 import React, { CSSProperties, ReactNode, useMemo, useState } from "react";
 
-const GOOGLE_SHEETS_ENDPOINT =
-  "https://script.google.com/macros/s/AKfycbxs_tE3OQE0G2awxqRqJFH4DwqaeeN7IaczuloHb6aEJJmyEq0YAGxiXuR1uALZn8ULzA/exec";
+const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycbzJ6fdhjYoS1n5ctE2pDwA58lcIHq_voLIBGczuxmYdeZgYHjbq5B66Xug_OY8jvAjq/exec";
 
 type RSVPForm = {
   familyName: string;
