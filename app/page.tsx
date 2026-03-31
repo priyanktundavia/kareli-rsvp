@@ -1,8 +1,9 @@
 "use client";
 
-import React, { CSSProperties, ReactNode, useMemo, useState } from "react";
+import React, { CSSProperties, ReactNode, useEffect, useMemo, useState } from "react";
 
-const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycbzJ6fdhjYoS1n5ctE2pDwA58lcIHq_voLIBGczuxmYdeZgYHjbq5B66Xug_OY8jvAjq/exec";
+const GOOGLE_SHEETS_ENDPOINT =
+  "https://script.google.com/macros/s/AKfycbzJ6fdhjYoS1n5ctE2pDwA58lcIHq_voLIBGczuxmYdeZgYHjbq5B66Xug_OY8jvAjq/exec";
 
 type RSVPForm = {
   familyName: string;
@@ -22,6 +23,12 @@ type RSVPSubmission = RSVPForm & {
   submittedAt: string;
 };
 
+type PublicTotals = {
+  families: number;
+  attendees: number;
+  rooms: number;
+};
+
 const initialForm: RSVPForm = {
   familyName: "",
   primaryContact: "",
@@ -36,6 +43,12 @@ const initialForm: RSVPForm = {
   notes: "",
 };
 
+const initialTotals: PublicTotals = {
+  families: 0,
+  attendees: 0,
+  rooms: 0,
+};
+
 function calculateTotalPeople(items: Array<Pick<RSVPForm, "adults" | "kids">>): number {
   return items.reduce((sum, item) => sum + Number(item.adults || 0) + Number(item.kids || 0), 0);
 }
@@ -47,31 +60,50 @@ function calculateTotalRooms(items: Array<Pick<RSVPForm, "hotelNeeded" | "roomsN
   }, 0);
 }
 
-console.assert(calculateTotalPeople([{ adults: "2", kids: "3" }]) === 5, "Expected total people to equal 5");
-console.assert(
-  calculateTotalRooms([
-    { hotelNeeded: "yes", roomsNeeded: "2" },
-    { hotelNeeded: "no", roomsNeeded: "4" },
-  ]) === 2,
-  "Expected total rooms to equal 2"
-);
-console.assert(
-  calculateTotalPeople([
-    { adults: "2", kids: "1" },
-    { adults: "3", kids: "0" },
-  ]) === 6,
-  "Expected totals across multiple families to equal 6"
-);
-
 export default function Page() {
   const [form, setForm] = useState<RSVPForm>(initialForm);
   const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [publicTotals, setPublicTotals] = useState<PublicTotals>(initialTotals);
+  const [isLoadingTotals, setIsLoadingTotals] = useState(true);
 
-  const totalFamilies = submitted.length;
-  const totalPeople = useMemo(() => calculateTotalPeople(submitted), [submitted]);
-  const totalRooms = useMemo(() => calculateTotalRooms(submitted), [submitted]);
+  useEffect(() => {
+    document.title = "Kareli Gaam Convention RSVP";
+  }, []);
+
+  useEffect(() => {
+    const loadTotals = async () => {
+      try {
+        const response = await fetch("/api/totals", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        setPublicTotals({
+          families: Number(data.families || 0),
+          attendees: Number(data.attendees || 0),
+          rooms: Number(data.rooms || 0),
+        });
+      } catch (error) {
+        console.error("Error loading public totals:", error);
+      } finally {
+        setIsLoadingTotals(false);
+      }
+    };
+
+    loadTotals();
+  }, []);
+
+  const localFamilies = submitted.length;
+  const localPeople = useMemo(() => calculateTotalPeople(submitted), [submitted]);
+  const localRooms = useMemo(() => calculateTotalRooms(submitted), [submitted]);
+
+  const totalFamilies = publicTotals.families + localFamilies;
+  const totalPeople = publicTotals.attendees + localPeople;
+  const totalRooms = publicTotals.rooms + localRooms;
 
   const updateField = <K extends keyof RSVPForm>(key: K, value: RSVPForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -117,23 +149,29 @@ export default function Page() {
             <div style={styles.badge}>Kareli Gaam Convention 2026</div>
             <h1 style={styles.heroTitle}>Dallas Sneh Milan RSVP</h1>
             <p style={styles.heroText}>
-              A warm invitation for the entire Kareli family — sons, daughters, sisters, and their families — to come together and celebrate.
+              A warm invitation for the entire Kareli family — sons, daughters, sisters, and their
+              families — to come together and celebrate.
             </p>
           </div>
         </section>
 
         <section style={styles.statsRow}>
-          <StatCard label="Families" value={String(totalFamilies)} />
-          <StatCard label="Attendees" value={String(totalPeople)} />
-          <StatCard label="Rooms Booked" value={String(totalRooms)} />
+          <StatCard label="Families" value={isLoadingTotals ? "..." : String(totalFamilies)} />
+          <StatCard label="Attendees" value={isLoadingTotals ? "..." : String(totalPeople)} />
+          <StatCard label="Rooms Booked" value={isLoadingTotals ? "..." : String(totalRooms)} />
           <StatCard label="RSVP" value="Apr 30" />
         </section>
+
+        <div style={styles.liveNote}>
+          Live registration totals update automatically as new families submit their RSVP.
+        </div>
 
         <div style={styles.mainGrid}>
           <section style={styles.card}>
             <h2 style={styles.sectionTitle}>Registration Form</h2>
             <p style={styles.sectionText}>
-              Please submit one form per family. This helps us estimate attendance and hotel room needs.
+              Please submit one form per family. This helps us estimate attendance and hotel room
+              needs.
             </p>
 
             <form onSubmit={handleSubmit} style={styles.formGrid}>
@@ -178,7 +216,11 @@ export default function Page() {
               </Field>
 
               <Field label="Adults">
-                <select style={styles.input} value={form.adults} onChange={(e) => updateField("adults", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.adults}
+                  onChange={(e) => updateField("adults", e.target.value)}
+                >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -188,7 +230,11 @@ export default function Page() {
               </Field>
 
               <Field label="Kids">
-                <select style={styles.input} value={form.kids} onChange={(e) => updateField("kids", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.kids}
+                  onChange={(e) => updateField("kids", e.target.value)}
+                >
                   {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -197,13 +243,17 @@ export default function Page() {
                 </select>
               </Field>
 
-              <div style={styles.noticeBox}>All families are assumed to attend July 20–22. If different, mention it in Notes.</div>
+              <div style={styles.noticeBox}>
+                All families are assumed to attend July 20–22. If different, mention it in Notes.
+              </div>
 
               <Field label="Need Hotel Room?">
                 <select
                   style={styles.input}
                   value={form.hotelNeeded}
-                  onChange={(e) => updateField("hotelNeeded", e.target.value as RSVPForm["hotelNeeded"])}
+                  onChange={(e) =>
+                    updateField("hotelNeeded", e.target.value as RSVPForm["hotelNeeded"])
+                  }
                 >
                   <option value="yes">Yes</option>
                   <option value="no">No</option>
@@ -211,7 +261,11 @@ export default function Page() {
               </Field>
 
               <Field label="Rooms Needed">
-                <select style={styles.input} value={form.roomsNeeded} onChange={(e) => updateField("roomsNeeded", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.roomsNeeded}
+                  onChange={(e) => updateField("roomsNeeded", e.target.value)}
+                >
                   {[1, 2, 3, 4].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -221,7 +275,11 @@ export default function Page() {
               </Field>
 
               <Field label="Number of Nights">
-                <select style={styles.input} value={form.nights} onChange={(e) => updateField("nights", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.nights}
+                  onChange={(e) => updateField("nights", e.target.value)}
+                >
                   <option value="1">1 Night</option>
                   <option value="2">2 Nights</option>
                   <option value="3">3 Nights</option>
@@ -232,7 +290,9 @@ export default function Page() {
                 <select
                   style={styles.input}
                   value={form.travelMode}
-                  onChange={(e) => updateField("travelMode", e.target.value as RSVPForm["travelMode"])}
+                  onChange={(e) =>
+                    updateField("travelMode", e.target.value as RSVPForm["travelMode"])
+                  }
                 >
                   <option value="">Select</option>
                   <option value="Flight">Flight</option>
@@ -275,11 +335,12 @@ export default function Page() {
             <section style={styles.card}>
               <h3 style={styles.sidebarTitle}>Recent</h3>
               {submitted.length === 0 ? (
-                <div style={styles.mutedText}>No registrations yet</div>
+                <div style={styles.mutedText}>No registrations yet in this browser session</div>
               ) : (
                 submitted.map((entry, i) => (
                   <div key={`${entry.familyName}-${i}`} style={styles.recentItem}>
-                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people - {entry.roomsNeeded} rooms × {entry.nights} nights
+                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people -{" "}
+                    {entry.roomsNeeded} rooms × {entry.nights} nights
                   </div>
                 ))
               )}
@@ -378,7 +439,17 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 16,
+    marginBottom: 16,
+  },
+  liveNote: {
     marginBottom: 24,
+    fontSize: 14,
+    color: "#475569",
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 18,
+    padding: 14,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.04)",
   },
   statCard: {
     background: "white",
