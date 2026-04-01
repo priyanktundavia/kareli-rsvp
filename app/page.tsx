@@ -375,9 +375,13 @@ export default function Page() {
 
               <div style={styles.footerBar} className="footer-bar">
                 <div style={styles.footerText}>July 20–22, 2026 · Hyatt Place Garland</div>
-                <button type="submit" disabled={isSubmitting} style={styles.button} className="footer-button">
-                  {isSubmitting ? "Submitting..." : "Submit RSVP"}
-                </button>
+                <button 
+  type="submit" 
+  disabled={isSubmitting} 
+  className="w-full py-4 text-lg font-semibold rounded-xl bg-green-600 text-white shadow-md active:scale-[0.98] transition duration-150"
+>
+  {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
+</button>
               </div>
 
               {success && (
