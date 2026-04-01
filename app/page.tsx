@@ -373,7 +373,10 @@ export default function Page() {
                 </Field>
               </div>
 
-              <div style={styles.footerBar} className="footer-bar">
+              <div
+  style={styles.footerBar}
+  className="footer-bar fixed bottom-0 left-0 right-0 z-50 p-4 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.08)] md:static md:shadow-none md:p-0"
+>
                 <div style={styles.footerText}>July 20–22, 2026 · Hyatt Place Garland</div>
                 <button 
   type="submit" 
