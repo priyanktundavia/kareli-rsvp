@@ -5,6 +5,8 @@ import React, { CSSProperties, ReactNode, useEffect, useMemo, useState } from "r
 const GOOGLE_SHEETS_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbzJ6fdhjYoS1n5ctE2pDwA58lcIHq_voLIBGczuxmYdeZgYHjbq5B66Xug_OY8jvAjq/exec";
 
+type RoomTypeOption = "" | "King Bed" | "Two Queen Beds";
+
 type RSVPForm = {
   familyName: string;
   primaryContact: string;
@@ -14,6 +16,7 @@ type RSVPForm = {
   kids: string;
   hotelNeeded: "yes" | "no";
   roomsNeeded: string;
+  roomTypes: RoomTypeOption[];
   nights: string;
   travelMode: "" | "Flight" | "Drive" | "Other";
   notes: string;
@@ -38,6 +41,7 @@ const initialForm: RSVPForm = {
   kids: "0",
   hotelNeeded: "yes",
   roomsNeeded: "1",
+  roomTypes: [""],
   nights: "2",
   travelMode: "",
   notes: "",
@@ -58,6 +62,14 @@ function calculateTotalRooms(items: Array<Pick<RSVPForm, "hotelNeeded" | "roomsN
     if (item.hotelNeeded !== "yes") return sum;
     return sum + Number(item.roomsNeeded || 0);
   }, 0);
+}
+
+function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): RoomTypeOption[] {
+  const normalized = [...roomTypes];
+  while (normalized.length < roomsNeeded) {
+    normalized.push("");
+  }
+  return normalized.slice(0, roomsNeeded);
 }
 
 console.assert(calculateTotalPeople([{ adults: "2", kids: "3" }]) === 5, "Expected total people to equal 5");
@@ -124,11 +136,43 @@ export default function Page() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const updateHotelNeeded = (value: RSVPForm["hotelNeeded"]) => {
+    setForm((prev) => ({
+      ...prev,
+      hotelNeeded: value,
+      roomTypes: value === "yes" ? normalizeRoomTypes(prev.roomTypes, Number(prev.roomsNeeded || 1)) : [],
+    }));
+  };
+
+  const updateRoomsNeeded = (value: string) => {
+    const roomCount = Number(value || 1);
+    setForm((prev) => ({
+      ...prev,
+      roomsNeeded: value,
+      roomTypes: prev.hotelNeeded === "yes" ? normalizeRoomTypes(prev.roomTypes, roomCount) : [],
+    }));
+  };
+
+  const updateRoomType = (index: number, value: RoomTypeOption) => {
+    setForm((prev) => {
+      const nextRoomTypes = normalizeRoomTypes(prev.roomTypes, Number(prev.roomsNeeded || 1));
+      nextRoomTypes[index] = value;
+      return {
+        ...prev,
+        roomTypes: nextRoomTypes,
+      };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    const normalizedRoomTypes =
+      form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
+
     const payload: RSVPSubmission = {
       ...form,
+      roomTypes: normalizedRoomTypes,
       submittedAt: new Date().toLocaleString(),
     };
 
@@ -154,6 +198,9 @@ export default function Page() {
       window.setTimeout(() => setSuccess(false), 3000);
     }
   };
+
+  const visibleRoomTypes =
+    form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
 
   return (
     <main style={styles.page}>
@@ -324,7 +371,7 @@ export default function Page() {
                 <select
                   style={styles.input}
                   value={form.hotelNeeded}
-                  onChange={(e) => updateField("hotelNeeded", e.target.value as RSVPForm["hotelNeeded"])}
+                  onChange={(e) => updateHotelNeeded(e.target.value as RSVPForm["hotelNeeded"])}
                 >
                   <option value="yes">Yes</option>
                   <option value="no">No</option>
@@ -332,7 +379,12 @@ export default function Page() {
               </Field>
 
               <Field label="Rooms Needed">
-                <select style={styles.input} value={form.roomsNeeded} onChange={(e) => updateField("roomsNeeded", e.target.value)}>
+                <select
+                  style={styles.input}
+                  value={form.roomsNeeded}
+                  onChange={(e) => updateRoomsNeeded(e.target.value)}
+                  disabled={form.hotelNeeded !== "yes"}
+                >
                   {[1, 2, 3, 4].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -340,6 +392,22 @@ export default function Page() {
                   ))}
                 </select>
               </Field>
+
+              {form.hotelNeeded === "yes" &&
+                visibleRoomTypes.map((roomType, index) => (
+                  <Field key={`room-type-${index}`} label={`Room ${index + 1} Type`}>
+                    <select
+                      style={styles.input}
+                      value={roomType}
+                      onChange={(e) => updateRoomType(index, e.target.value as RoomTypeOption)}
+                      required
+                    >
+                      <option value="">Select room type</option>
+                      <option value="King Bed">King Bed</option>
+                      <option value="Two Queen Beds">Two Queen Beds</option>
+                    </select>
+                  </Field>
+                ))}
 
               <Field label="Number of Nights">
                 <select style={styles.input} value={form.nights} onChange={(e) => updateField("nights", e.target.value)}>
@@ -374,24 +442,20 @@ export default function Page() {
               </div>
 
               <div
-  style={styles.footerBar}
-  className="footer-bar fixed bottom-0 left-0 right-0 z-50 p-4 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.08)] md:static md:shadow-none md:p-0"
->
+                style={styles.footerBar}
+                className="footer-bar fixed bottom-0 left-0 right-0 z-50 p-4 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.08)] md:static md:shadow-none md:p-0"
+              >
                 <div style={styles.footerText}>July 20–22, 2026 · Hyatt Place Garland</div>
-                <button 
-  type="submit" 
-  disabled={isSubmitting} 
-  className="w-full py-4 text-lg font-semibold rounded-xl bg-green-600 text-white shadow-md active:scale-[0.98] transition duration-150"
->
-  {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
-</button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-4 text-lg font-semibold rounded-xl bg-green-600 text-white shadow-md active:scale-[0.98] transition duration-150"
+                >
+                  {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
+                </button>
               </div>
 
-              {success && (
-                <div style={styles.successBox}>
-                  Thank you {successName}, your RSVP is confirmed.
-                </div>
-              )}
+              {success && <div style={styles.successBox}>Thank you {successName}, your RSVP is confirmed.</div>}
             </form>
           </section>
 
@@ -412,6 +476,7 @@ export default function Page() {
                 submitted.map((entry, i) => (
                   <div key={`${entry.familyName}-${i}`} style={styles.recentItem}>
                     {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people - {entry.roomsNeeded} rooms × {entry.nights} nights
+                    {entry.hotelNeeded === "yes" && entry.roomTypes.length > 0 ? ` - ${entry.roomTypes.join(", ")}` : ""}
                   </div>
                 ))
               )}
@@ -447,7 +512,7 @@ const styles: Record<string, CSSProperties> = {
     background: "linear-gradient(to bottom, #fff7ed, #ffffff, #fff1f2)",
     color: "#1e293b",
     fontFamily: "Arial, sans-serif",
-    padding: "24px 16px",
+    padding: "24px 16px 140px 16px",
   },
   container: {
     maxWidth: 1200,
