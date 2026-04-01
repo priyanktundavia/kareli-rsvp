@@ -441,10 +441,7 @@ export default function Page() {
                 </Field>
               </div>
 
-              <div
-                style={styles.footerBar}
-                className="footer-bar fixed bottom-0 left-0 right-0 z-50 p-4 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.08)] md:static md:shadow-none md:p-0"
-              >
+              <div style={styles.footerBar} className="footer-bar">
                 <div style={styles.footerText}>July 20–22, 2026 · Hyatt Place Garland</div>
                 <button
                   type="submit"
@@ -455,7 +452,11 @@ export default function Page() {
                 </button>
               </div>
 
-              {success && <div style={styles.successBox}>Thank you {successName}, your RSVP is confirmed.</div>}
+              {success && (
+                <div style={styles.successBox}>
+                  Thank you {successName}, your RSVP is confirmed.
+                </div>
+              )}
             </form>
           </section>
 
@@ -475,7 +476,7 @@ export default function Page() {
               ) : (
                 submitted.map((entry, i) => (
                   <div key={`${entry.familyName}-${i}`} style={styles.recentItem}>
-                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people - {entry.roomsNeeded} rooms × {entry.nights} nights
+                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people - {entry.roomsNeeded} rooms × {entry.nights}
                     {entry.hotelNeeded === "yes" && entry.roomTypes.length > 0 ? ` - ${entry.roomTypes.join(", ")}` : ""}
                   </div>
                 ))
@@ -512,7 +513,7 @@ const styles: Record<string, CSSProperties> = {
     background: "linear-gradient(to bottom, #fff7ed, #ffffff, #fff1f2)",
     color: "#1e293b",
     fontFamily: "Arial, sans-serif",
-    padding: "24px 16px 140px 16px",
+    padding: "24px 16px",
   },
   container: {
     maxWidth: 1200,
