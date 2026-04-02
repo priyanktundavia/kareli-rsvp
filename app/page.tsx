@@ -93,6 +93,7 @@ export default function Page() {
   const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
   const [success, setSuccess] = useState(false);
   const [successName, setSuccessName] = useState("");
+  const [successEmailSent, setSuccessEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [publicTotals, setPublicTotals] = useState<PublicTotals>(initialTotals);
   const [isLoadingTotals, setIsLoadingTotals] = useState(true);
@@ -191,7 +192,8 @@ export default function Page() {
       console.error("Error sending to Google Sheets:", err);
     } finally {
       setSubmitted((prev) => [payload, ...prev]);
-      setSuccessName(payload.familyName || payload.primaryContact || "Your family");
+      setSuccessName(payload.primaryContact || payload.familyName || "Your family");
+      setSuccessEmailSent(Boolean(String(payload.email || "").trim()));
       setForm(initialForm);
       setSuccess(true);
       setIsSubmitting(false);
@@ -455,6 +457,7 @@ export default function Page() {
               {success && (
                 <div style={styles.successBox}>
                   Thank you {successName}, your RSVP is confirmed.
+                  {successEmailSent ? " Check your email." : ""}
                 </div>
               )}
             </form>
