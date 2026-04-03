@@ -89,9 +89,21 @@ function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): R
   return normalized.slice(0, roomsNeeded);
 }
 
+function formatDateForDisplay(value: string): string {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function formatStayDates(checkIn: string, checkOut: string): string {
   if (!checkIn || !checkOut) return "Dates not selected";
-  return `${checkIn} to ${checkOut}`;
+  return `${formatDateForDisplay(checkIn)} – ${formatDateForDisplay(checkOut)}`;
 }
 
 console.assert(
