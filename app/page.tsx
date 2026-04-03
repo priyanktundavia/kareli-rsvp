@@ -49,7 +49,7 @@ const initialForm: RSVPForm = {
   hotelNeeded: "yes",
   roomsNeeded: "1",
   roomTypes: [""],
-  checkIn: "2026-07-20",
+  checkIn: "2026-07-19",
   checkOut: "2026-07-22",
   travelMode: "",
   notes: "",
@@ -201,11 +201,19 @@ export default function Page() {
     const normalizedRoomTypes =
       form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
 
-    const payload = {
+    const submittedAt = new Date().toLocaleString();
+
+    const payload: RSVPSubmission & { eventLocation: string } = {
       ...form,
       roomTypes: normalizedRoomTypes,
       eventLocation: EVENT_HOTEL_FULL,
-      submittedAt: new Date().toLocaleString(),
+      submittedAt,
+    };
+
+    const localEntry: RSVPSubmission = {
+      ...form,
+      roomTypes: normalizedRoomTypes,
+      submittedAt,
     };
 
     setIsSubmitting(true);
@@ -219,23 +227,18 @@ export default function Page() {
         },
         body: JSON.stringify(payload),
       });
-    } catch (err) {
-      console.error("Error sending to Google Sheets:", err);
-    } finally {
-      setSubmitted((prev) => [
-        {
-          ...form,
-          roomTypes: normalizedRoomTypes,
-          submittedAt: new Date().toLocaleString(),
-        },
-        ...prev,
-      ]);
+
+      setSubmitted((prev) => [localEntry, ...prev]);
       setSuccessName(payload.primaryContact || payload.familyName || "Your family");
       setSuccessEmailSent(Boolean(String(payload.email || "").trim()));
       setForm(initialForm);
       setSuccess(true);
-      setIsSubmitting(false);
       window.setTimeout(() => setSuccess(false), 4000);
+    } catch (err) {
+      console.error("Error sending to Google Sheets:", err);
+      alert("There was an error submitting your RSVP. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -554,7 +557,7 @@ export default function Page() {
                 <div style={styles.mutedText}>No registrations yet in this browser session</div>
               ) : (
                 submitted.map((entry, i) => (
-                  <div key={`${entry.familyName}-${i}`} style={styles.recentItem}>
+                  <div key={`${entry.familyName}-${entry.primaryContact}-${entry.submittedAt}-${i}`} style={styles.recentItem}>
                     {entry.familyName} -{" "}
                     {Number(entry.adults) + Number(entry.kidsUnder6) + Number(entry.kids6AndOver)} people
                     {entry.hotelNeeded === "yes"
