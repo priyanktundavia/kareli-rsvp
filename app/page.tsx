@@ -38,11 +38,6 @@ type PublicTotals = {
   rooms: number;
 };
 
-type SubmitResponse = {
-  status?: "created" | "duplicate" | "error";
-  message?: string;
-};
-
 const initialForm: RSVPForm = {
   familyName: "",
   primaryContact: "",
@@ -135,7 +130,6 @@ export default function Page() {
   const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
   const [latestSavedEntry, setLatestSavedEntry] = useState<RSVPSubmission | null>(null);
   const [success, setSuccess] = useState(false);
-  const [duplicateMessage, setDuplicateMessage] = useState(false);
   const [successName, setSuccessName] = useState("");
   const [successEmailSent, setSuccessEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -260,28 +254,16 @@ export default function Page() {
 
     setIsSubmitting(true);
     setSuccess(false);
-    setDuplicateMessage(false);
 
     try {
-      const response = await fetch(GOOGLE_SHEETS_ENDPOINT, {
+      await fetch(GOOGLE_SHEETS_ENDPOINT, {
         method: "POST",
+        mode: "no-cors",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
-
-      const result: SubmitResponse = await response.json();
-
-      if (result.status === "duplicate") {
-        setDuplicateMessage(true);
-        window.setTimeout(() => setDuplicateMessage(false), 5000);
-        return;
-      }
-
-      if (result.status && result.status !== "created") {
-        throw new Error(result.message || "Unexpected response from server.");
-      }
 
       setSubmitted((prev) => [localEntry, ...prev]);
       setLatestSavedEntry(localEntry);
@@ -592,12 +574,6 @@ export default function Page() {
                   {successEmailSent ? " Check your email." : ""}
                 </div>
               )}
-
-              {duplicateMessage && (
-                <div style={styles.warningBox}>
-                  You have already submitted an RSVP.
-                </div>
-              )}
             </form>
           </section>
 
@@ -830,15 +806,6 @@ const styles: Record<string, CSSProperties> = {
     background: "#f0fdf4",
     color: "#166534",
     border: "1px solid #bbf7d0",
-    borderRadius: 18,
-    padding: 16,
-    fontWeight: 600,
-  },
-  warningBox: {
-    gridColumn: "1 / -1",
-    background: "#fff7ed",
-    color: "#9a3412",
-    border: "1px solid #fdba74",
     borderRadius: 18,
     padding: 16,
     fontWeight: 600,
