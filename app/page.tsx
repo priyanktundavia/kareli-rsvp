@@ -1,6 +1,6 @@
 "use client";
 
-import React, { CSSProperties, ReactNode, useEffect, useMemo, useState } from "react";
+import React, { CSSProperties, ReactNode, useEffect, useState } from "react";
 
 const GOOGLE_SHEETS_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbzJ6fdhjYoS1n5ctE2pDwA58lcIHq_voLIBGczuxmYdeZgYHjbq5B66Xug_OY8jvAjq/exec";
@@ -28,16 +28,6 @@ type RSVPForm = {
   notes: string;
 };
 
-type RSVPSubmission = RSVPForm & {
-  submittedAt: string;
-};
-
-type PublicTotals = {
-  families: number;
-  attendees: number;
-  rooms: number;
-};
-
 const initialForm: RSVPForm = {
   familyName: "",
   primaryContact: "",
@@ -55,32 +45,6 @@ const initialForm: RSVPForm = {
   notes: "",
 };
 
-const initialTotals: PublicTotals = {
-  families: 0,
-  attendees: 0,
-  rooms: 0,
-};
-
-function calculateTotalPeople(
-  items: Array<Pick<RSVPForm, "adults" | "kidsUnder6" | "kids6AndOver">>
-): number {
-  return items.reduce(
-    (sum, item) =>
-      sum +
-      Number(item.adults || 0) +
-      Number(item.kidsUnder6 || 0) +
-      Number(item.kids6AndOver || 0),
-    0
-  );
-}
-
-function calculateTotalRooms(items: Array<Pick<RSVPForm, "hotelNeeded" | "roomsNeeded">>): number {
-  return items.reduce((sum, item) => {
-    if (item.hotelNeeded !== "yes") return sum;
-    return sum + Number(item.roomsNeeded || 0);
-  }, 0);
-}
-
 function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): RoomTypeOption[] {
   const normalized = [...roomTypes];
   while (normalized.length < roomsNeeded) {
@@ -89,110 +53,17 @@ function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): R
   return normalized.slice(0, roomsNeeded);
 }
 
-function formatDateForDisplay(value: string): string {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatStayDates(checkIn: string, checkOut: string): string {
-  if (!checkIn || !checkOut) return "Dates not selected";
-  return `${formatDateForDisplay(checkIn)} – ${formatDateForDisplay(checkOut)}`;
-}
-
-console.assert(
-  calculateTotalPeople([{ adults: "2", kidsUnder6: "1", kids6AndOver: "2" }]) === 5,
-  "Expected total people to equal 5"
-);
-console.assert(
-  calculateTotalRooms([
-    { hotelNeeded: "yes", roomsNeeded: "2" },
-    { hotelNeeded: "no", roomsNeeded: "4" },
-  ]) === 2,
-  "Expected total rooms to equal 2"
-);
-console.assert(
-  calculateTotalPeople([
-    { adults: "2", kidsUnder6: "1", kids6AndOver: "0" },
-    { adults: "3", kidsUnder6: "0", kids6AndOver: "1" },
-  ]) === 7,
-  "Expected totals across multiple families to equal 7"
-);
-
 export default function Page() {
   const [form, setForm] = useState<RSVPForm>(initialForm);
-  const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
-  const [latestSavedEntry, setLatestSavedEntry] = useState<RSVPSubmission | null>(null);
   const [success, setSuccess] = useState(false);
   const [successName, setSuccessName] = useState("");
   const [successEmailSent, setSuccessEmailSent] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [publicTotals, setPublicTotals] = useState<PublicTotals>(initialTotals);
-  const [isLoadingTotals, setIsLoadingTotals] = useState(true);
 
   useEffect(() => {
     document.title = "Kareli Gaam Convention RSVP";
   }, []);
-
-  useEffect(() => {
-    const loadTotals = async () => {
-      try {
-        const response = await fetch(GOOGLE_SHEETS_ENDPOINT, {
-          method: "GET",
-          cache: "no-store",
-        });
-        const data = await response.json();
-
-        setPublicTotals({
-          families: Number(data.families || 0),
-          attendees: Number(data.attendees || 0),
-          rooms: Number(data.rooms || 0),
-        });
-
-        if (data.latestEntry) {
-          setLatestSavedEntry({
-            familyName: data.latestEntry.familyName || "",
-            primaryContact: data.latestEntry.primaryContact || "",
-            phone: data.latestEntry.phone || "",
-            email: data.latestEntry.email || "",
-            adults: String(data.latestEntry.adults || "0"),
-            kidsUnder6: String(data.latestEntry.kidsUnder6 || "0"),
-            kids6AndOver: String(data.latestEntry.kids6AndOver || "0"),
-            hotelNeeded: data.latestEntry.hotelNeeded === "yes" ? "yes" : "no",
-            roomsNeeded: String(data.latestEntry.roomsNeeded || ""),
-            roomTypes: Array.isArray(data.latestEntry.roomTypes) ? data.latestEntry.roomTypes : [],
-            checkIn: data.latestEntry.checkIn || "",
-            checkOut: data.latestEntry.checkOut || "",
-            travelMode: data.latestEntry.travelMode || "",
-            notes: data.latestEntry.notes || "",
-            submittedAt: String(data.latestEntry.submittedAt || ""),
-          });
-        } else {
-          setLatestSavedEntry(null);
-        }
-      } catch (error) {
-        console.error("Error loading public totals:", error);
-      } finally {
-        setIsLoadingTotals(false);
-      }
-    };
-
-    loadTotals();
-  }, []);
-
-  const localFamilies = submitted.length;
-  const localPeople = useMemo(() => calculateTotalPeople(submitted), [submitted]);
-  const localRooms = useMemo(() => calculateTotalRooms(submitted), [submitted]);
-
-  const totalFamilies = publicTotals.families + localFamilies;
-  const totalPeople = publicTotals.attendees + localPeople;
-  const totalRooms = publicTotals.rooms + localRooms;
 
   const updateField = <K extends keyof RSVPForm>(key: K, value: RSVPForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -228,53 +99,73 @@ export default function Page() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setSuccess(false);
+    setErrorMessage("");
 
     if (form.hotelNeeded === "yes" && form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
-      alert("Please select a check-out date after the check-in date.");
+      setErrorMessage("Please select a check-out date after the check-in date.");
       return;
     }
 
     const normalizedRoomTypes =
       form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
 
-    const submittedAt = new Date().toLocaleString();
-
-    const payload: RSVPSubmission & { eventLocation: string } = {
-      ...form,
-      roomTypes: normalizedRoomTypes,
-      eventLocation: EVENT_HOTEL_FULL,
-      submittedAt,
-    };
-
-    const localEntry: RSVPSubmission = {
-      ...form,
-      roomTypes: normalizedRoomTypes,
-      submittedAt,
-    };
+    const totalAttendees =
+      Number(form.adults || 0) +
+      Number(form.kidsUnder6 || 0) +
+      Number(form.kids6AndOver || 0);
 
     setIsSubmitting(true);
-    setSuccess(false);
 
     try {
-      await fetch(GOOGLE_SHEETS_ENDPOINT, {
+      const params = new URLSearchParams();
+      params.append("familyName", form.familyName.trim());
+      params.append("headName", form.familyName.trim());
+      params.append("primaryContact", form.primaryContact.trim());
+      params.append("phone", form.phone.trim());
+      params.append("email", form.email.trim());
+      params.append("adults", form.adults);
+      params.append("kidsUnder6", form.kidsUnder6);
+      params.append("kids6AndOver", form.kids6AndOver);
+      params.append(
+        "kids",
+        String(Number(form.kidsUnder6 || 0) + Number(form.kids6AndOver || 0))
+      );
+      params.append("totalAttendees", String(totalAttendees));
+      params.append("hotelNeeded", form.hotelNeeded);
+      params.append("roomsNeeded", form.hotelNeeded === "yes" ? form.roomsNeeded : "0");
+      params.append(
+        "roomTypes",
+        form.hotelNeeded === "yes" ? normalizedRoomTypes.filter(Boolean).join(", ") : ""
+      );
+      params.append("checkIn", form.checkIn);
+      params.append("checkOut", form.checkOut);
+      params.append("travelMode", form.travelMode);
+      params.append("notes", form.notes.trim());
+      params.append("eventLocation", EVENT_HOTEL_FULL);
+
+      const response = await fetch(GOOGLE_SHEETS_ENDPOINT, {
         method: "POST",
-        mode: "no-cors",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },
-        body: JSON.stringify(payload),
+        body: params.toString(),
       });
 
-      setSubmitted((prev) => [localEntry, ...prev]);
-      setLatestSavedEntry(localEntry);
-      setSuccessName(payload.primaryContact || payload.familyName || "Your family");
-      setSuccessEmailSent(Boolean(String(payload.email || "").trim()));
-      setForm(initialForm);
-      setSuccess(true);
-      window.setTimeout(() => setSuccess(false), 4000);
+      const text = (await response.text()).trim();
+
+      if (response.ok && text === "SUCCESS") {
+        setSuccessName(form.primaryContact || form.familyName || "Your family");
+        setSuccessEmailSent(Boolean(String(form.email || "").trim()));
+        setForm(initialForm);
+        setSuccess(true);
+        window.setTimeout(() => setSuccess(false), 4000);
+      } else {
+        setErrorMessage(text || "There was an error submitting your RSVP. Please try again.");
+      }
     } catch (err) {
       console.error("Error sending to Google Sheets:", err);
-      alert("There was an error submitting your RSVP. Please try again.");
+      setErrorMessage("There was an error submitting your RSVP. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -283,8 +174,6 @@ export default function Page() {
   const visibleRoomTypes =
     form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
 
-  const recentEntry = submitted.length > 0 ? submitted[0] : latestSavedEntry;
-
   return (
     <main style={styles.page}>
       <style>{`
@@ -292,11 +181,6 @@ export default function Page() {
         html, body {
           width: 100%;
           overflow-x: hidden;
-        }
-        .stats-row {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
         }
         .main-grid {
           display: grid;
@@ -311,11 +195,6 @@ export default function Page() {
         }
         .field-span-full {
           grid-column: 1 / -1;
-        }
-        @media (min-width: 641px) {
-          .stats-row {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-          }
         }
         @media (min-width: 901px) {
           .main-grid {
@@ -369,15 +248,8 @@ export default function Page() {
           </div>
         </section>
 
-        <section style={styles.statsRow} className="stats-row">
-          <StatCard label="Families" value={isLoadingTotals ? "..." : String(totalFamilies)} />
-          <StatCard label="Attendees" value={isLoadingTotals ? "..." : String(totalPeople)} />
-          <StatCard label="Rooms Booked" value={isLoadingTotals ? "..." : String(totalRooms)} />
-          <StatCard label="RSVP" value="Apr 30" />
-        </section>
-
         <div style={styles.liveNote} className="live-note">
-          Live registration totals update automatically as new families submit their RSVP.
+          Please submit one RSVP per family. Duplicate submissions will be prevented automatically.
         </div>
 
         <div style={styles.mainGrid} className="main-grid">
@@ -425,6 +297,7 @@ export default function Page() {
                   value={form.email}
                   onChange={(e) => updateField("email", e.target.value)}
                   placeholder="name@email.com"
+                  required
                 />
               </Field>
 
@@ -562,7 +435,8 @@ export default function Page() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="footer-button w-full py-4 text-lg font-semibold rounded-xl bg-green-600 text-white shadow-md active:scale-[0.98] transition duration-150"
+                  className="footer-button"
+                  style={styles.submitButton}
                 >
                   {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
                 </button>
@@ -574,6 +448,8 @@ export default function Page() {
                   {successEmailSent ? " Check your email." : ""}
                 </div>
               )}
+
+              {errorMessage && <div style={styles.errorBox}>{errorMessage}</div>}
             </form>
           </section>
 
@@ -592,24 +468,13 @@ export default function Page() {
             </section>
 
             <section style={styles.card} className="section-card">
-              <h3 style={styles.sidebarTitle}>Recent</h3>
-              {!recentEntry ? (
-                <div style={styles.mutedText}>No registrations yet</div>
-              ) : (
-                <div
-                  key={`${recentEntry.familyName}-${recentEntry.primaryContact}-${recentEntry.submittedAt}`}
-                  style={styles.recentItem}
-                >
-                  {recentEntry.familyName} -{" "}
-                  {Number(recentEntry.adults) + Number(recentEntry.kidsUnder6) + Number(recentEntry.kids6AndOver)} people
-                  {recentEntry.hotelNeeded === "yes"
-                    ? ` - ${recentEntry.roomsNeeded} rooms - ${formatStayDates(recentEntry.checkIn, recentEntry.checkOut)}`
-                    : " - No hotel needed"}
-                  {recentEntry.hotelNeeded === "yes" && recentEntry.roomTypes.length > 0
-                    ? ` - ${recentEntry.roomTypes.join(", ")}`
-                    : ""}
-                </div>
-              )}
+              <h3 style={styles.sidebarTitle}>Important</h3>
+              <div style={styles.sidebarText}>
+                Please submit only once per family. If a duplicate RSVP is submitted, the backend will block it automatically.
+              </div>
+              <div style={styles.sidebarText}>
+                After a successful submission, your RSVP will be saved to Google Sheets and a confirmation email will be sent.
+              </div>
             </section>
           </aside>
         </div>
@@ -623,15 +488,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div style={styles.fieldWrap}>
       <label style={styles.label}>{label}</label>
       {children}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={styles.statCard}>
-      <div style={styles.statValue}>{value}</div>
-      <div style={styles.statLabel}>{label}</div>
     </div>
   );
 }
@@ -701,10 +557,6 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 16,
     marginBottom: 0,
   },
-  statsRow: {
-    gap: 16,
-    marginBottom: 16,
-  },
   liveNote: {
     marginBottom: 24,
     fontSize: 14,
@@ -714,22 +566,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     padding: 14,
     boxShadow: "0 8px 24px rgba(0,0,0,0.04)",
-  },
-  statCard: {
-    background: "white",
-    borderRadius: 22,
-    padding: 20,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
-    border: "1px solid #e5e7eb",
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 800,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: "#64748b",
   },
   mainGrid: {
     gap: 24,
@@ -801,11 +637,33 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     color: "#334155",
   },
+  submitButton: {
+    width: "100%",
+    maxWidth: 320,
+    padding: "16px 20px",
+    fontSize: 18,
+    fontWeight: 700,
+    borderRadius: 12,
+    border: "none",
+    background: "#16a34a",
+    color: "#ffffff",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+    cursor: "pointer",
+  },
   successBox: {
     gridColumn: "1 / -1",
     background: "#f0fdf4",
     color: "#166534",
     border: "1px solid #bbf7d0",
+    borderRadius: 18,
+    padding: 16,
+    fontWeight: 600,
+  },
+  errorBox: {
+    gridColumn: "1 / -1",
+    background: "#fef2f2",
+    color: "#991b1b",
+    border: "1px solid #fecaca",
     borderRadius: 18,
     padding: 16,
     fontWeight: 600,
@@ -829,17 +687,5 @@ const styles: Record<string, CSSProperties> = {
   inlineMuted: {
     color: "#64748b",
     fontSize: 14,
-  },
-  mutedText: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  recentItem: {
-    fontSize: 14,
-    color: "#334155",
-    borderBottom: "1px solid #e5e7eb",
-    paddingBottom: 10,
-    marginBottom: 10,
-    lineHeight: 1.5,
   },
 };
