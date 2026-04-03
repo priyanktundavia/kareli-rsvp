@@ -116,6 +116,7 @@ console.assert(
 export default function Page() {
   const [form, setForm] = useState<RSVPForm>(initialForm);
   const [submitted, setSubmitted] = useState<RSVPSubmission[]>([]);
+  const [latestSavedEntry, setLatestSavedEntry] = useState<RSVPSubmission | null>(null);
   const [success, setSuccess] = useState(false);
   const [successName, setSuccessName] = useState("");
   const [successEmailSent, setSuccessEmailSent] = useState(false);
@@ -135,11 +136,34 @@ export default function Page() {
           cache: "no-store",
         });
         const data = await response.json();
+
         setPublicTotals({
           families: Number(data.families || 0),
           attendees: Number(data.attendees || 0),
           rooms: Number(data.rooms || 0),
         });
+
+        if (data.latestEntry) {
+          setLatestSavedEntry({
+            familyName: data.latestEntry.familyName || "",
+            primaryContact: data.latestEntry.primaryContact || "",
+            phone: data.latestEntry.phone || "",
+            email: data.latestEntry.email || "",
+            adults: String(data.latestEntry.adults || "0"),
+            kidsUnder6: String(data.latestEntry.kidsUnder6 || "0"),
+            kids6AndOver: String(data.latestEntry.kids6AndOver || "0"),
+            hotelNeeded: data.latestEntry.hotelNeeded === "yes" ? "yes" : "no",
+            roomsNeeded: String(data.latestEntry.roomsNeeded || ""),
+            roomTypes: Array.isArray(data.latestEntry.roomTypes) ? data.latestEntry.roomTypes : [],
+            checkIn: data.latestEntry.checkIn || "",
+            checkOut: data.latestEntry.checkOut || "",
+            travelMode: data.latestEntry.travelMode || "",
+            notes: data.latestEntry.notes || "",
+            submittedAt: String(data.latestEntry.submittedAt || ""),
+          });
+        } else {
+          setLatestSavedEntry(null);
+        }
       } catch (error) {
         console.error("Error loading public totals:", error);
       } finally {
@@ -229,6 +253,7 @@ export default function Page() {
       });
 
       setSubmitted((prev) => [localEntry, ...prev]);
+      setLatestSavedEntry(localEntry);
       setSuccessName(payload.primaryContact || payload.familyName || "Your family");
       setSuccessEmailSent(Boolean(String(payload.email || "").trim()));
       setForm(initialForm);
@@ -244,6 +269,8 @@ export default function Page() {
 
   const visibleRoomTypes =
     form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
+
+  const recentEntry = submitted.length > 0 ? submitted[0] : latestSavedEntry;
 
   return (
     <main style={styles.page}>
@@ -553,19 +580,22 @@ export default function Page() {
 
             <section style={styles.card} className="section-card">
               <h3 style={styles.sidebarTitle}>Recent</h3>
-              {submitted.length === 0 ? (
-                <div style={styles.mutedText}>No registrations yet in this browser session</div>
+              {!recentEntry ? (
+                <div style={styles.mutedText}>No registrations yet</div>
               ) : (
-                submitted.map((entry, i) => (
-                  <div key={`${entry.familyName}-${entry.primaryContact}-${entry.submittedAt}-${i}`} style={styles.recentItem}>
-                    {entry.familyName} -{" "}
-                    {Number(entry.adults) + Number(entry.kidsUnder6) + Number(entry.kids6AndOver)} people
-                    {entry.hotelNeeded === "yes"
-                      ? ` - ${entry.roomsNeeded} rooms - ${formatStayDates(entry.checkIn, entry.checkOut)}`
-                      : " - No hotel needed"}
-                    {entry.hotelNeeded === "yes" && entry.roomTypes.length > 0 ? ` - ${entry.roomTypes.join(", ")}` : ""}
-                  </div>
-                ))
+                <div
+                  key={`${recentEntry.familyName}-${recentEntry.primaryContact}-${recentEntry.submittedAt}`}
+                  style={styles.recentItem}
+                >
+                  {recentEntry.familyName} -{" "}
+                  {Number(recentEntry.adults) + Number(recentEntry.kidsUnder6) + Number(recentEntry.kids6AndOver)} people
+                  {recentEntry.hotelNeeded === "yes"
+                    ? ` - ${recentEntry.roomsNeeded} rooms - ${formatStayDates(recentEntry.checkIn, recentEntry.checkOut)}`
+                    : " - No hotel needed"}
+                  {recentEntry.hotelNeeded === "yes" && recentEntry.roomTypes.length > 0
+                    ? ` - ${recentEntry.roomTypes.join(", ")}`
+                    : ""}
+                </div>
               )}
             </section>
           </aside>
