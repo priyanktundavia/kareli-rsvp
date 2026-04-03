@@ -5,6 +5,10 @@ import React, { CSSProperties, ReactNode, useEffect, useMemo, useState } from "r
 const GOOGLE_SHEETS_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbzJ6fdhjYoS1n5ctE2pDwA58lcIHq_voLIBGczuxmYdeZgYHjbq5B66Xug_OY8jvAjq/exec";
 
+const EVENT_HOTEL_NAME = "Hyatt Place Garland";
+const EVENT_HOTEL_ADDRESS = "5101 N President George Bush Hwy, Garland, TX 75040";
+const EVENT_HOTEL_FULL = `${EVENT_HOTEL_NAME}, ${EVENT_HOTEL_ADDRESS}`;
+
 type RoomTypeOption = "" | "King Bed" | "Two Queen Beds";
 
 type RSVPForm = {
@@ -13,11 +17,13 @@ type RSVPForm = {
   phone: string;
   email: string;
   adults: string;
-  kids: string;
+  kidsUnder6: string;
+  kids6AndOver: string;
   hotelNeeded: "yes" | "no";
   roomsNeeded: string;
   roomTypes: RoomTypeOption[];
-  nights: string;
+  checkIn: string;
+  checkOut: string;
   travelMode: "" | "Flight" | "Drive" | "Other";
   notes: string;
 };
@@ -38,11 +44,13 @@ const initialForm: RSVPForm = {
   phone: "",
   email: "",
   adults: "1",
-  kids: "0",
+  kidsUnder6: "0",
+  kids6AndOver: "0",
   hotelNeeded: "yes",
   roomsNeeded: "1",
   roomTypes: [""],
-  nights: "2",
+  checkIn: "2026-07-20",
+  checkOut: "2026-07-22",
   travelMode: "",
   notes: "",
 };
@@ -53,8 +61,17 @@ const initialTotals: PublicTotals = {
   rooms: 0,
 };
 
-function calculateTotalPeople(items: Array<Pick<RSVPForm, "adults" | "kids">>): number {
-  return items.reduce((sum, item) => sum + Number(item.adults || 0) + Number(item.kids || 0), 0);
+function calculateTotalPeople(
+  items: Array<Pick<RSVPForm, "adults" | "kidsUnder6" | "kids6AndOver">>
+): number {
+  return items.reduce(
+    (sum, item) =>
+      sum +
+      Number(item.adults || 0) +
+      Number(item.kidsUnder6 || 0) +
+      Number(item.kids6AndOver || 0),
+    0
+  );
 }
 
 function calculateTotalRooms(items: Array<Pick<RSVPForm, "hotelNeeded" | "roomsNeeded">>): number {
@@ -72,7 +89,15 @@ function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): R
   return normalized.slice(0, roomsNeeded);
 }
 
-console.assert(calculateTotalPeople([{ adults: "2", kids: "3" }]) === 5, "Expected total people to equal 5");
+function formatStayDates(checkIn: string, checkOut: string): string {
+  if (!checkIn || !checkOut) return "Dates not selected";
+  return `${checkIn} to ${checkOut}`;
+}
+
+console.assert(
+  calculateTotalPeople([{ adults: "2", kidsUnder6: "1", kids6AndOver: "2" }]) === 5,
+  "Expected total people to equal 5"
+);
 console.assert(
   calculateTotalRooms([
     { hotelNeeded: "yes", roomsNeeded: "2" },
@@ -82,10 +107,10 @@ console.assert(
 );
 console.assert(
   calculateTotalPeople([
-    { adults: "2", kids: "1" },
-    { adults: "3", kids: "0" },
-  ]) === 6,
-  "Expected totals across multiple families to equal 6"
+    { adults: "2", kidsUnder6: "1", kids6AndOver: "0" },
+    { adults: "3", kidsUnder6: "0", kids6AndOver: "1" },
+  ]) === 7,
+  "Expected totals across multiple families to equal 7"
 );
 
 export default function Page() {
@@ -168,12 +193,18 @@ export default function Page() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    if (form.hotelNeeded === "yes" && form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
+      alert("Please select a check-out date after the check-in date.");
+      return;
+    }
+
     const normalizedRoomTypes =
       form.hotelNeeded === "yes" ? normalizeRoomTypes(form.roomTypes, Number(form.roomsNeeded || 1)) : [];
 
-    const payload: RSVPSubmission = {
+    const payload = {
       ...form,
       roomTypes: normalizedRoomTypes,
+      eventLocation: EVENT_HOTEL_FULL,
       submittedAt: new Date().toLocaleString(),
     };
 
@@ -191,13 +222,20 @@ export default function Page() {
     } catch (err) {
       console.error("Error sending to Google Sheets:", err);
     } finally {
-      setSubmitted((prev) => [payload, ...prev]);
+      setSubmitted((prev) => [
+        {
+          ...form,
+          roomTypes: normalizedRoomTypes,
+          submittedAt: new Date().toLocaleString(),
+        },
+        ...prev,
+      ]);
       setSuccessName(payload.primaryContact || payload.familyName || "Your family");
       setSuccessEmailSent(Boolean(String(payload.email || "").trim()));
       setForm(initialForm);
       setSuccess(true);
       setIsSubmitting(false);
-      window.setTimeout(() => setSuccess(false), 3000);
+      window.setTimeout(() => setSuccess(false), 4000);
     }
   };
 
@@ -303,7 +341,7 @@ export default function Page() {
           <section style={styles.card} className="section-card">
             <h2 style={styles.sectionTitle}>Registration Form</h2>
             <p style={styles.sectionText}>
-              Please submit one form per family. This helps us estimate attendance and hotel room needs.
+              Please submit one form per family. This helps us estimate attendance, convention count, and hotel room needs.
             </p>
 
             <form onSubmit={handleSubmit} style={styles.formGrid} className="form-grid">
@@ -347,7 +385,7 @@ export default function Page() {
                 />
               </Field>
 
-              <Field label="Adults">
+              <Field label="Adults (18+)">
                 <select style={styles.input} value={form.adults} onChange={(e) => updateField("adults", e.target.value)}>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
                     <option key={n} value={String(n)}>
@@ -357,8 +395,12 @@ export default function Page() {
                 </select>
               </Field>
 
-              <Field label="Kids">
-                <select style={styles.input} value={form.kids} onChange={(e) => updateField("kids", e.target.value)}>
+              <Field label="Children (Under 6)">
+                <select
+                  style={styles.input}
+                  value={form.kidsUnder6}
+                  onChange={(e) => updateField("kidsUnder6", e.target.value)}
+                >
                   {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                     <option key={n} value={String(n)}>
                       {n}
@@ -367,7 +409,23 @@ export default function Page() {
                 </select>
               </Field>
 
-              <div style={styles.noticeBox}>All families are assumed to attend July 20–22. If different, mention it in Notes.</div>
+              <Field label="Youth (Ages 6–17)">
+                <select
+                  style={styles.input}
+                  value={form.kids6AndOver}
+                  onChange={(e) => updateField("kids6AndOver", e.target.value)}
+                >
+                  {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div style={styles.noticeBox} className="field-span-full">
+                Please select your expected stay dates below. If your plans may change, you can mention that in Notes.
+              </div>
 
               <Field label="Need Hotel Room?">
                 <select
@@ -411,12 +469,25 @@ export default function Page() {
                   </Field>
                 ))}
 
-              <Field label="Number of Nights">
-                <select style={styles.input} value={form.nights} onChange={(e) => updateField("nights", e.target.value)}>
-                  <option value="1">1 Night</option>
-                  <option value="2">2 Nights</option>
-                  <option value="3">3 Nights</option>
-                </select>
+              <Field label="Check-In">
+                <input
+                  style={styles.input}
+                  type="date"
+                  value={form.checkIn}
+                  onChange={(e) => updateField("checkIn", e.target.value)}
+                  disabled={form.hotelNeeded !== "yes"}
+                />
+              </Field>
+
+              <Field label="Check-Out">
+                <input
+                  style={styles.input}
+                  type="date"
+                  value={form.checkOut}
+                  min={form.checkIn || undefined}
+                  onChange={(e) => updateField("checkOut", e.target.value)}
+                  disabled={form.hotelNeeded !== "yes"}
+                />
               </Field>
 
               <Field label="Travel Mode">
@@ -444,11 +515,11 @@ export default function Page() {
               </div>
 
               <div style={styles.footerBar} className="footer-bar">
-                <div style={styles.footerText}>July 20–22, 2026 · Hyatt Place Garland</div>
+                <div style={styles.footerText}>July 20–22, 2026 · {EVENT_HOTEL_NAME}</div>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-4 text-lg font-semibold rounded-xl bg-green-600 text-white shadow-md active:scale-[0.98] transition duration-150"
+                  className="footer-button w-full py-4 text-lg font-semibold rounded-xl bg-green-600 text-white shadow-md active:scale-[0.98] transition duration-150"
                 >
                   {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
                 </button>
@@ -466,10 +537,15 @@ export default function Page() {
           <aside style={styles.sidebar}>
             <section style={styles.card} className="section-card">
               <h3 style={styles.sidebarTitle}>Event Info</h3>
-              <div style={styles.sidebarText}>Hyatt Place Garland, TX</div>
+              <div style={styles.sidebarText}>{EVENT_HOTEL_FULL}</div>
               <div style={styles.sidebarText}>July 20–22, 2026</div>
-              <div style={styles.sidebarText}>$200 per person</div>
-              <div style={styles.sidebarText}>$99/night rooms</div>
+              <div style={styles.sidebarText}>
+                Convention Fee: $200 per person for adults and youth ages 6–17{" "}
+                <span style={styles.inlineMuted}>(children under 6 attend free)</span>
+              </div>
+              <div style={styles.sidebarText}>
+                Room Rate: $99 + tax per night <span style={styles.inlineMuted}>(One King or Two Queens)</span>
+              </div>
             </section>
 
             <section style={styles.card} className="section-card">
@@ -479,7 +555,11 @@ export default function Page() {
               ) : (
                 submitted.map((entry, i) => (
                   <div key={`${entry.familyName}-${i}`} style={styles.recentItem}>
-                    {entry.familyName} - {Number(entry.adults) + Number(entry.kids)} people - {entry.roomsNeeded} rooms × {entry.nights}
+                    {entry.familyName} -{" "}
+                    {Number(entry.adults) + Number(entry.kidsUnder6) + Number(entry.kids6AndOver)} people
+                    {entry.hotelNeeded === "yes"
+                      ? ` - ${entry.roomsNeeded} rooms - ${formatStayDates(entry.checkIn, entry.checkOut)}`
+                      : " - No hotel needed"}
                     {entry.hotelNeeded === "yes" && entry.roomTypes.length > 0 ? ` - ${entry.roomTypes.join(", ")}` : ""}
                   </div>
                 ))
@@ -675,16 +755,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     color: "#334155",
   },
-  button: {
-    background: "#111827",
-    color: "white",
-    border: "none",
-    borderRadius: 14,
-    padding: "12px 18px",
-    fontSize: 15,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
   successBox: {
     gridColumn: "1 / -1",
     background: "#f0fdf4",
@@ -708,6 +778,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     color: "#334155",
     marginBottom: 10,
+    lineHeight: 1.5,
+  },
+  inlineMuted: {
+    color: "#64748b",
+    fontSize: 14,
   },
   mutedText: {
     fontSize: 14,
@@ -719,5 +794,6 @@ const styles: Record<string, CSSProperties> = {
     borderBottom: "1px solid #e5e7eb",
     paddingBottom: 10,
     marginBottom: 10,
+    lineHeight: 1.5,
   },
 };
