@@ -515,7 +515,7 @@ export default function Page() {
               </Field>
 
               <div style={styles.noticeBox} className="field-span-full">
-                Please select your expected stay dates below. If your plans may change, you can mention that in Notes.
+                Select your expected stay dates below. You may update this information later if needed.
               </div>
 
               <Field label="Need Hotel Room?">
@@ -647,7 +647,7 @@ export default function Page() {
             </section>
 
             <section style={styles.card} className="section-card">
-              <h3 style={styles.sidebarTitle}>Recent</h3>
+              <h3 style={styles.sidebarTitle}>Recent Registration</h3>
               {!latestEntry ? (
                 <div style={styles.mutedText}>No registrations yet</div>
               ) : (
