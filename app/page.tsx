@@ -275,7 +275,7 @@ export default function Page() {
           roomsNeeded: form.hotelNeeded === "yes" ? form.roomsNeeded : "0",
           roomTypes:
             form.hotelNeeded === "yes"
-              ? normalizedRoomTypes.filter(Boolean) as string[]
+              ? (normalizedRoomTypes.filter(Boolean) as string[])
               : [],
           checkIn: form.checkIn,
           checkOut: form.checkOut,
@@ -327,9 +327,33 @@ export default function Page() {
         .field-span-full {
           grid-column: 1 / -1;
         }
+        .footer-bar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 20px;
+        }
+        .footer-text-wrap {
+          display: flex;
+          align-items: center;
+          min-width: 0;
+        }
+        .footer-button-wrap {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+        }
         @media (min-width: 641px) {
           .stats-row {
             grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 900px) {
+          .main-grid {
+            grid-template-columns: 1fr;
+          }
+          .form-grid {
+            grid-template-columns: 1fr;
           }
         }
         @media (min-width: 901px) {
@@ -360,11 +384,19 @@ export default function Page() {
             min-width: 0 !important;
           }
           .footer-bar {
-            flex-direction: column;
-            align-items: stretch !important;
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+          .footer-text-wrap {
+            justify-content: center !important;
+            text-align: center !important;
+          }
+          .footer-button-wrap {
+            justify-content: center !important;
           }
           .footer-button {
-            width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
           }
           .live-note {
             font-size: 13px !important;
@@ -574,15 +606,19 @@ export default function Page() {
               </div>
 
               <div style={styles.footerBar} className="footer-bar">
-                <div style={styles.footerText}>July 20–22, 2026 · {EVENT_HOTEL_NAME}</div>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="footer-button"
-                  style={styles.submitButton}
-                >
-                  {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
-                </button>
+                <div className="footer-text-wrap">
+                  <div style={styles.footerText}>July 20–22, 2026 · {EVENT_HOTEL_NAME}</div>
+                </div>
+                <div className="footer-button-wrap">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="footer-button"
+                    style={styles.submitButton}
+                  >
+                    {isSubmitting ? "Submitting..." : "Confirm My RSVP"}
+                  </button>
+                </div>
               </div>
 
               {success && (
@@ -807,26 +843,25 @@ const styles: Record<string, CSSProperties> = {
   },
   footerBar: {
     gridColumn: "1 / -1",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
     background: "#f8fafc",
     borderRadius: 18,
-    padding: 16,
+    padding: 18,
     flexWrap: "wrap",
   },
   footerText: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: 600,
     color: "#334155",
+    lineHeight: 1.4,
   },
   submitButton: {
     width: "100%",
-    maxWidth: 320,
-    padding: "16px 20px",
+    minWidth: 220,
+    maxWidth: 360,
+    padding: "16px 24px",
     fontSize: 18,
     fontWeight: 700,
-    borderRadius: 12,
+    borderRadius: 14,
     border: "none",
     background: "#16a34a",
     color: "#ffffff",
