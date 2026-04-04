@@ -28,6 +28,12 @@ type RSVPForm = {
   notes: string;
 };
 
+type PublicTotals = {
+  families: number;
+  attendees: number;
+  rooms: number;
+};
+
 const initialForm: RSVPForm = {
   familyName: "",
   primaryContact: "",
@@ -43,6 +49,12 @@ const initialForm: RSVPForm = {
   checkOut: "2026-07-22",
   travelMode: "",
   notes: "",
+};
+
+const initialTotals: PublicTotals = {
+  families: 0,
+  attendees: 0,
+  rooms: 0,
 };
 
 function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): RoomTypeOption[] {
@@ -61,8 +73,37 @@ export default function Page() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [publicTotals, setPublicTotals] = useState<PublicTotals>(initialTotals);
+  const [isLoadingTotals, setIsLoadingTotals] = useState(true);
+
   useEffect(() => {
     document.title = "Kareli Gaam Convention RSVP";
+  }, []);
+
+  useEffect(() => {
+    const loadTotals = async () => {
+      try {
+        const response = await fetch(GOOGLE_SHEETS_ENDPOINT, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        setPublicTotals({
+          families: Number(data.families || 0),
+          attendees: Number(data.attendees || 0),
+          rooms: Number(data.rooms || 0),
+        });
+      } catch (error) {
+        console.error("Error loading public totals:", error);
+        setPublicTotals(initialTotals);
+      } finally {
+        setIsLoadingTotals(false);
+      }
+    };
+
+    loadTotals();
   }, []);
 
   const updateField = <K extends keyof RSVPForm>(key: K, value: RSVPForm[K]) => {
@@ -159,6 +200,15 @@ export default function Page() {
         setSuccessEmailSent(Boolean(String(form.email || "").trim()));
         setForm(initialForm);
         setSuccess(true);
+
+        setPublicTotals((prev) => ({
+          families: prev.families + 1,
+          attendees: prev.attendees + totalAttendees,
+          rooms:
+            prev.rooms +
+            (form.hotelNeeded === "yes" ? Number(form.roomsNeeded || 0) : 0),
+        }));
+
         window.setTimeout(() => setSuccess(false), 4000);
       } else {
         setErrorMessage(text || "There was an error submitting your RSVP. Please try again.");
@@ -182,6 +232,11 @@ export default function Page() {
           width: 100%;
           overflow-x: hidden;
         }
+        .stats-row {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
         .main-grid {
           display: grid;
           grid-template-columns: 1fr;
@@ -195,6 +250,11 @@ export default function Page() {
         }
         .field-span-full {
           grid-column: 1 / -1;
+        }
+        @media (min-width: 641px) {
+          .stats-row {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
         }
         @media (min-width: 901px) {
           .main-grid {
@@ -248,8 +308,15 @@ export default function Page() {
           </div>
         </section>
 
+        <section style={styles.statsRow} className="stats-row">
+          <StatCard label="Families" value={isLoadingTotals ? "..." : String(publicTotals.families)} />
+          <StatCard label="Attendees" value={isLoadingTotals ? "..." : String(publicTotals.attendees)} />
+          <StatCard label="Rooms Booked" value={isLoadingTotals ? "..." : String(publicTotals.rooms)} />
+          <StatCard label="RSVP" value="Apr 30" />
+        </section>
+
         <div style={styles.liveNote} className="live-note">
-          Please submit one RSVP per family. Duplicate submissions will be prevented automatically.
+          Live registration totals update automatically as new families submit their RSVP.
         </div>
 
         <div style={styles.mainGrid} className="main-grid">
@@ -492,6 +559,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statValue}>{value}</div>
+      <div style={styles.statLabel}>{label}</div>
+    </div>
+  );
+}
+
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -557,6 +633,10 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 16,
     marginBottom: 0,
   },
+  statsRow: {
+    gap: 16,
+    marginBottom: 16,
+  },
   liveNote: {
     marginBottom: 24,
     fontSize: 14,
@@ -566,6 +646,22 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 18,
     padding: 14,
     boxShadow: "0 8px 24px rgba(0,0,0,0.04)",
+  },
+  statCard: {
+    background: "white",
+    borderRadius: 22,
+    padding: 20,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+    border: "1px solid #e5e7eb",
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: 800,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: "#64748b",
   },
   mainGrid: {
     gap: 24,
