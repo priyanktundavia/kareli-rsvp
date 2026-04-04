@@ -34,6 +34,24 @@ type PublicTotals = {
   rooms: number;
 };
 
+type LatestEntry = {
+  submittedAt: string;
+  familyName: string;
+  primaryContact: string;
+  phone: string;
+  email: string;
+  adults: string;
+  kidsUnder6: string;
+  kids6AndOver: string;
+  hotelNeeded: "yes" | "no";
+  roomsNeeded: string;
+  roomTypes: string[];
+  checkIn: string;
+  checkOut: string;
+  travelMode: string;
+  notes: string;
+};
+
 const initialForm: RSVPForm = {
   familyName: "",
   primaryContact: "",
@@ -65,6 +83,21 @@ function normalizeRoomTypes(roomTypes: RoomTypeOption[], roomsNeeded: number): R
   return normalized.slice(0, roomsNeeded);
 }
 
+function formatDateForDisplay(value: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatStayDates(checkIn: string, checkOut: string): string {
+  if (!checkIn || !checkOut) return "Dates not selected";
+  return `${formatDateForDisplay(checkIn)} – ${formatDateForDisplay(checkOut)}`;
+}
+
 export default function Page() {
   const [form, setForm] = useState<RSVPForm>(initialForm);
   const [success, setSuccess] = useState(false);
@@ -74,6 +107,7 @@ export default function Page() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [publicTotals, setPublicTotals] = useState<PublicTotals>(initialTotals);
+  const [latestEntry, setLatestEntry] = useState<LatestEntry | null>(null);
   const [isLoadingTotals, setIsLoadingTotals] = useState(true);
 
   useEffect(() => {
@@ -95,9 +129,32 @@ export default function Page() {
           attendees: Number(data.attendees || 0),
           rooms: Number(data.rooms || 0),
         });
+
+        if (data.latestEntry) {
+          setLatestEntry({
+            submittedAt: String(data.latestEntry.submittedAt || ""),
+            familyName: String(data.latestEntry.familyName || ""),
+            primaryContact: String(data.latestEntry.primaryContact || ""),
+            phone: String(data.latestEntry.phone || ""),
+            email: String(data.latestEntry.email || ""),
+            adults: String(data.latestEntry.adults || "0"),
+            kidsUnder6: String(data.latestEntry.kidsUnder6 || "0"),
+            kids6AndOver: String(data.latestEntry.kids6AndOver || "0"),
+            hotelNeeded: data.latestEntry.hotelNeeded === "yes" ? "yes" : "no",
+            roomsNeeded: String(data.latestEntry.roomsNeeded || ""),
+            roomTypes: Array.isArray(data.latestEntry.roomTypes) ? data.latestEntry.roomTypes : [],
+            checkIn: String(data.latestEntry.checkIn || ""),
+            checkOut: String(data.latestEntry.checkOut || ""),
+            travelMode: String(data.latestEntry.travelMode || ""),
+            notes: String(data.latestEntry.notes || ""),
+          });
+        } else {
+          setLatestEntry(null);
+        }
       } catch (error) {
         console.error("Error loading public totals:", error);
         setPublicTotals(initialTotals);
+        setLatestEntry(null);
       } finally {
         setIsLoadingTotals(false);
       }
@@ -198,17 +255,36 @@ export default function Page() {
       if (response.ok && text === "SUCCESS") {
         setSuccessName(form.primaryContact || form.familyName || "Your family");
         setSuccessEmailSent(Boolean(String(form.email || "").trim()));
-        setForm(initialForm);
-        setSuccess(true);
 
         setPublicTotals((prev) => ({
           families: prev.families + 1,
           attendees: prev.attendees + totalAttendees,
-          rooms:
-            prev.rooms +
-            (form.hotelNeeded === "yes" ? Number(form.roomsNeeded || 0) : 0),
+          rooms: prev.rooms + (form.hotelNeeded === "yes" ? Number(form.roomsNeeded || 0) : 0),
         }));
 
+        setLatestEntry({
+          submittedAt: new Date().toISOString(),
+          familyName: form.familyName,
+          primaryContact: form.primaryContact,
+          phone: form.phone,
+          email: form.email,
+          adults: form.adults,
+          kidsUnder6: form.kidsUnder6,
+          kids6AndOver: form.kids6AndOver,
+          hotelNeeded: form.hotelNeeded,
+          roomsNeeded: form.hotelNeeded === "yes" ? form.roomsNeeded : "0",
+          roomTypes:
+            form.hotelNeeded === "yes"
+              ? normalizedRoomTypes.filter(Boolean) as string[]
+              : [],
+          checkIn: form.checkIn,
+          checkOut: form.checkOut,
+          travelMode: form.travelMode,
+          notes: form.notes,
+        });
+
+        setForm(initialForm);
+        setSuccess(true);
         window.setTimeout(() => setSuccess(false), 4000);
       } else {
         setErrorMessage(text || "There was an error submitting your RSVP. Please try again.");
@@ -535,13 +611,24 @@ export default function Page() {
             </section>
 
             <section style={styles.card} className="section-card">
-              <h3 style={styles.sidebarTitle}>Important</h3>
-              <div style={styles.sidebarText}>
-                Please submit only once per family. If a duplicate RSVP is submitted, the backend will block it automatically.
-              </div>
-              <div style={styles.sidebarText}>
-                After a successful submission, your RSVP will be saved to Google Sheets and a confirmation email will be sent.
-              </div>
+              <h3 style={styles.sidebarTitle}>Recent</h3>
+              {!latestEntry ? (
+                <div style={styles.mutedText}>No registrations yet</div>
+              ) : (
+                <div style={styles.recentItem}>
+                  {latestEntry.familyName} -{" "}
+                  {Number(latestEntry.adults) +
+                    Number(latestEntry.kidsUnder6) +
+                    Number(latestEntry.kids6AndOver)}{" "}
+                  people
+                  {latestEntry.hotelNeeded === "yes"
+                    ? ` - ${latestEntry.roomsNeeded} rooms - ${formatStayDates(latestEntry.checkIn, latestEntry.checkOut)}`
+                    : " - No hotel needed"}
+                  {latestEntry.hotelNeeded === "yes" && latestEntry.roomTypes.length > 0
+                    ? ` - ${latestEntry.roomTypes.join(", ")}`
+                    : ""}
+                </div>
+              )}
             </section>
           </aside>
         </div>
@@ -783,5 +870,17 @@ const styles: Record<string, CSSProperties> = {
   inlineMuted: {
     color: "#64748b",
     fontSize: 14,
+  },
+  mutedText: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  recentItem: {
+    fontSize: 14,
+    color: "#334155",
+    borderBottom: "1px solid #e5e7eb",
+    paddingBottom: 10,
+    marginBottom: 10,
+    lineHeight: 1.5,
   },
 };
